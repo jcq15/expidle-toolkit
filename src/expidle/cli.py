@@ -101,7 +101,7 @@ def main(argv=None) -> int:
             buttons = FarmProfile.load(args.farm_profile)
             device = Android(args.adb, args.serial, tap_delay_ms=args.tap_delay_ms)
             board = current_board(device.capture(), puzzle, buttons)
-            mode = f"{args.batch_size} taps per batch" if args.batch_size else "whole board"
+            mode = f"{args.batch_size} taps per verified batch" if args.batch_size else "skip final screenshots"
             print(f"Expert farm: {args.rounds} round(s), {mode}.")
             if puzzle.solved(board):
                 print("The reward screen is open. Starting will tap it to open the first new board.")

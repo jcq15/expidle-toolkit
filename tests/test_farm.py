@@ -24,9 +24,11 @@ class FakeGame:
         self.boards = iter(boards)
         self.board = (0,) * 37
         self.advance_taps = 0
+        self.frames = 0
         self.reward_label = "Awarded 25 stars"
 
     def capture(self):
+        self.frames += 1
         label = self.reward_label if not any(self.board) else "Give up"
         return frame_with_label(self.board, label)[0]
 
@@ -67,10 +69,21 @@ class FarmTest(unittest.TestCase):
         self.assertEqual(device.board, self.finished)
         self.assertEqual(messages[-1], "Verified 2/2 rounds.")
 
+    @patch("expidle.games.arrow_farm.sleep")
+    def test_fast_mode_reads_only_the_start_of_each_round(self, _):
+        other = self.puzzle.rules.turn(self.finished, 0)
+        device = FakeGame(self.puzzle, [self.active, other])
+        messages = []
+        farm(device, self.puzzle, self.profile, 2, None, report=messages.append)
+        self.assertEqual(device.frames, 3)  # Initial reward page and two new boards.
+        self.assertEqual(device.advance_taps, 2)
+        self.assertEqual(device.board, self.finished)
+        self.assertIn("Final board was not checked", messages[-1])
+
     def test_unknown_reward_screen_stops_without_input(self):
         device = FakeGame(self.puzzle, [])
         device.reward_label = "Give up"
-        with self.assertRaisesRegex(ToolkitError, "Completed 0/2"):
+        with self.assertRaisesRegex(ToolkitError, "Verified 0/2"):
             farm(device, self.puzzle, self.profile, 2, 8, report=lambda _: None)
         self.assertEqual(device.advance_taps, 0)
 

@@ -12,6 +12,7 @@ from .arrow import Board
 from .arrow_screen import ArrowPuzzle
 
 Box = tuple[int, int, int, int]
+REWARD_DELAY = 0.15
 
 
 def mask(image: Image.Image) -> Image.Image:
@@ -143,20 +144,33 @@ def farm(
         raise ToolkitError("Use matching expert board and farm profiles.")
     if rounds < 1 or (batch_size is not None and not 1 <= batch_size <= 12):
         raise ValueError("Invalid round count or batch size.")
-    completed = 0
+    processed = 0
     try:
         board = current_board(screen.capture(), puzzle, profile)
+        if puzzle.solved(board):
+            # A solved board already on screen can be used to start, but is not counted.
+            screen.tap_many([profile.reward_point])
+            board = wait_for_board(screen, puzzle, profile, solved=False)
+
         for number in range(1, rounds + 1):
-            if puzzle.solved(board):
-                # A solved board already on screen can be used to start, but is not counted.
-                screen.tap_many([profile.reward_point])
-                board = wait_for_board(screen, puzzle, profile, solved=False)
             moves = puzzle.plan(board)
             report(f"Round {number}/{rounds}: {len(moves)} taps")
-            if not execute(screen, puzzle, board, moves, lambda *_: True, batch_size=batch_size or len(moves)):
-                raise ToolkitError("Board did not finish.")
-            board = wait_for_board(screen, puzzle, profile, solved=True)
-            completed += 1
-            report(f"Verified {completed}/{rounds} rounds.")
+            if batch_size is None:
+                screen.tap_many([move.point for move in moves])
+            else:
+                if not execute(screen, puzzle, board, moves, lambda *_: True, batch_size=batch_size):
+                    raise ToolkitError("Board did not finish.")
+                wait_for_board(screen, puzzle, profile, solved=True)
+            processed += 1
+            if batch_size is not None:
+                report(f"Verified {processed}/{rounds} rounds.")
+            if number < rounds:
+                if batch_size is None:
+                    sleep(REWARD_DELAY)
+                screen.tap_many([profile.reward_point])
+                board = wait_for_board(screen, puzzle, profile, solved=False)
+        if batch_size is None:
+            report(f"Sent solutions for {processed}/{rounds} rounds. Final board was not checked.")
     except ToolkitError as error:
-        raise ToolkitError(f"Completed {completed}/{rounds} rounds. {error}") from error
+        stage = "Sent solutions for" if batch_size is None else "Verified"
+        raise ToolkitError(f"{stage} {processed}/{rounds} rounds. {error}") from error
