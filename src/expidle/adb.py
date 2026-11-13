@@ -11,10 +11,10 @@ from .core import Point, ToolkitError
 PACKAGE = "com.conicgames.exponentialidle"
 
 
-def adb_call(adb: str, *args: str) -> bytes:
+def adb_call(adb: str, *args: str, timeout: float = 15) -> bytes:
     try:
         return subprocess.run(
-            [adb, *args], capture_output=True, check=True, timeout=15
+            [adb, *args], capture_output=True, check=True, timeout=timeout
         ).stdout
     except FileNotFoundError as error:
         raise ToolkitError("ADB not found. Install Android SDK Platform Tools.") from error
@@ -36,8 +36,8 @@ class Android:
             raise ToolkitError("Connect and authorize one device, or select it with --serial.")
         self.serial = serial
 
-    def run(self, *args: str) -> bytes:
-        return adb_call(self.adb, "-s", self.serial, *args)
+    def run(self, *args: str, timeout: float = 15) -> bytes:
+        return adb_call(self.adb, "-s", self.serial, *args, timeout=timeout)
 
     def require_game(self) -> None:
         windows = self.run("shell", "dumpsys", "window").decode(errors="replace")
@@ -60,4 +60,5 @@ class Android:
         self.require_game()
         commands = [f"input tap {int(x)} {int(y)}" for x, y in points]
         if commands:
-            self.run("shell", " && sleep 0.06 && ".join(commands))
+            # Full boards need time for the input command and pause per tap.
+            self.run("shell", " && sleep 0.06 && ".join(commands), timeout=15 + 0.6 * len(commands))

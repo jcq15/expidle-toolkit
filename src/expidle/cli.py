@@ -33,9 +33,9 @@ def parser() -> argparse.ArgumentParser:
     mode = run.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="preview without tapping (default)")
     mode.add_argument("--step", action="store_true", help="confirm every tap")
-    mode.add_argument("--apply", action="store_true", help="confirm once, then verify each batch")
+    mode.add_argument("--apply", action="store_true", help="confirm once, send all taps, then verify")
     run.add_argument("--limit", type=int, help="maximum number of taps this run")
-    run.add_argument("--batch-size", type=int, default=8, help="taps per check with --apply (1-12)")
+    run.add_argument("--batch-size", type=int, help="taps per check with --apply (1-12, default: whole board)")
     buttons = actions.add_parser("calibrate-farm", help="learn the two button labels from screenshots")
     buttons.add_argument("--profile", type=Path, required=True)
     buttons.add_argument("--farm-profile", type=Path, required=True)
@@ -113,7 +113,7 @@ def main(argv=None) -> int:
             cli.error("--step and --apply need a live ADB device")
         if args.action == "solve" and args.limit is not None and args.limit < 1:
             cli.error("--limit must be at least 1")
-        if args.action == "solve" and not 1 <= args.batch_size <= 12:
+        if args.action == "solve" and args.batch_size is not None and not 1 <= args.batch_size <= 12:
             cli.error("--batch-size must be 1-12")
         device = Android(args.adb, args.serial) if live else None
         if device is not None:
@@ -143,6 +143,9 @@ def main(argv=None) -> int:
             print("Cancelled.")
             return 0
 
+        tap_count = min(len(moves), args.limit or len(moves))
+        batch_size = (args.batch_size or tap_count) if args.apply else 1
+
         def approve(move, index):
             if args.step:
                 if input(f"Tap {index}, cell {move.cell + 1} at {move.point}? [y/N] ").lower() != "y":
@@ -150,13 +153,13 @@ def main(argv=None) -> int:
             if args.step:
                 print(f"Sending tap {index} at {move.point}", flush=True)
             else:
-                end = min(index + args.batch_size - 1, len(moves), args.limit or len(moves))
+                end = min(index + batch_size - 1, tap_count)
                 print(f"Sending taps {index}-{end}", flush=True)
             return True
 
         solved = execute(
             device, puzzle, state, moves, approve, limit=args.limit,
-            batch_size=args.batch_size if args.apply else 1,
+            batch_size=batch_size,
         )
         print("Verified: all cells are 1." if solved else "Stopped with an unfinished board.")
         return 0

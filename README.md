@@ -52,14 +52,14 @@ expidle arrow solve --profile local/expert.json --dry-run --overlay local/previe
 # 首次试一次，确认后最多点 1 下
 expidle arrow solve --profile local/expert.json --step --limit 1
 
-# 预览计划并输入 APPLY 后执行，默认每批最多 8 下
+# 预览计划并输入 APPLY 后执行，默认一次点完整盘，再截图校验
 expidle arrow solve --profile local/expert.json --apply
 
-# 减少每批点击数，适合动画较慢或想观察过程时
+# 可选分批，适合动画较慢或想观察过程时
 expidle arrow solve --profile local/expert.json --apply --batch-size 4
 ```
 
-默认只预览。运行中保持游戏在前台，不要同时操作手机。每批都会检查棋盘是否符合预期。识别失败、屏幕尺寸改变或棋盘出现意外时会停止，不会自动重试点击。可以按 Ctrl+C 中断，已发送到手机的那批点击可能仍会执行完。单盘模式只操作当前棋盘。
+默认只预览。运行中保持游戏在前台，不要同时操作手机。普通执行在点击前核对棋盘，点完整盘后再校验。指定分批时，每批都校验。识别失败、屏幕尺寸改变或棋盘出现意外时会停止，不会自动重试点击。可以按 Ctrl+C 中断，已发送到手机的那批点击可能仍会执行完。单盘模式只操作当前棋盘。
 
 离线也能校准和预览。先截屏，然后在两个命令中加 `--image local/board.png`：
 
@@ -80,7 +80,7 @@ expidle arrow farm --profile local/expert.json --farm-profile local/farm.json --
 expidle arrow farm --profile local/expert.json --farm-profile local/farm.json --rounds 10 --apply
 ```
 
-每局按批求解。确认所有格子都是 1 且底部出现奖励文字后，才点击奖励按钮打开下一局。每次开局后会确认新棋盘和进行中的按钮。达到指定局数时停在最后一局结算页。识别异常时打印已完成局数并停止。这里的局数按已确认的结算页计数，星星数量由游戏决定。
+刷分模式默认每批最多 8 下，也可以用 --batch-size 调整。确认所有格子都是 1 且底部出现奖励文字后，才点击奖励按钮打开下一局。每次开局后会确认新棋盘和进行中的按钮。达到指定局数时停在最后一局结算页。识别异常时打印已完成局数并停止。这里的局数按已确认的结算页计数，星星数量由游戏决定。
 
 第一次使用需要校准奖励按钮。用 `expidle capture` 保存一张正在玩的专家棋盘和同一盘解完后的结算页，查看两张原始截图中底部按钮文字的像素坐标。用两个矩形分别框住进行中的文字和结算文字，坐标顺序为左、上、右、下。下面坐标来自一台 1440 × 3120 的手机，请按截图替换。使用与专家棋盘校准相同的主题、语言和显示设置。奖励文字变化导致无法匹配时，用新的结算截图校准。
 
@@ -97,6 +97,6 @@ python -m unittest discover -s tests -v
 
 `adb.py` 管截图和点击，`core.py` 定义棋盘读取、计划、状态预测和执行校验接口，`games/arrow.py` 和 `games/arrow_screen.py` 分别实现 Arrow 的规则和识别。求解器把每个格的点击数作为变量，求同余方程的解并选择点击总数最小的一组。数字华容道和环面谜题可用同一截图和执行接口实现自己的棋盘模块。
 
-贡献时请附对应难度、平台、截图尺寸和最小复现步骤。截图和校准文件放在被 Git 忽略的 `local/`，报告问题前请裁掉通知和个人信息。自动化测试用程序绘制的棋盘，不需要连接手机。建议发布时采用 MIT 许可证，见 [LICENSE.proposed](LICENSE.proposed)，待仓库所有者确认。
+贡献时请附对应难度、平台、截图尺寸和最小复现步骤。截图和校准文件放在被 Git 忽略的 `local/`，报告问题前请裁掉通知和个人信息。自动化测试用程序绘制的棋盘，不需要连接手机。项目采用 [MIT 许可证](LICENSE)。
 
-This independent project reads and solves Exponential Idle's Android Arrow Puzzle in numeric mode. Calibrate once per difficulty and display setup. Preview is the default. Explicitly select step or batch mode to send taps.
+This independent project reads and solves Exponential Idle's Android Arrow Puzzle in numeric mode. Calibrate once per difficulty and display setup. Preview is the default. Use --apply to send the full solution and check the result, or --step to confirm individual taps.
