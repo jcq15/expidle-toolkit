@@ -9,6 +9,7 @@ from PIL import Image
 from .adb import Android
 from .core import ToolkitError, execute
 from .games.arrow import RULES
+from .games.arrow_farm import FarmProfile, current_board, farm
 from .games.arrow_screen import ArrowPuzzle, Profile
 
 
@@ -35,6 +36,20 @@ def parser() -> argparse.ArgumentParser:
     mode.add_argument("--apply", action="store_true", help="confirm once, then verify each batch")
     run.add_argument("--limit", type=int, help="maximum number of taps this run")
     run.add_argument("--batch-size", type=int, default=8, help="taps per check with --apply (1-12)")
+    buttons = actions.add_parser("calibrate-farm", help="learn the two button labels from screenshots")
+    buttons.add_argument("--profile", type=Path, required=True)
+    buttons.add_argument("--farm-profile", type=Path, required=True)
+    buttons.add_argument("--active-image", type=Path, required=True)
+    buttons.add_argument("--solved-image", type=Path, required=True)
+    for option in ("--active-box", "--reward-box"):
+        buttons.add_argument(option, nargs=4, type=int, metavar=("LEFT", "TOP", "RIGHT", "BOTTOM"),
+                             required=True, help="tight text rectangle in screenshot coordinates")
+    repeat = actions.add_parser("farm", help="play a fixed number of expert rounds")
+    repeat.add_argument("--profile", type=Path, required=True)
+    repeat.add_argument("--farm-profile", type=Path, required=True)
+    repeat.add_argument("--rounds", type=int, required=True)
+    repeat.add_argument("--batch-size", type=int, default=8, help="taps per check (1-12)")
+    repeat.add_argument("--apply", action="store_true", help="confirm once, then play")
     return cli
 
 
@@ -61,6 +76,36 @@ def main(argv=None) -> int:
     try:
         if args.command == "capture":
             save_png(Android(args.adb, args.serial).capture(), args.output)
+            return 0
+        if args.action == "calibrate-farm":
+            puzzle = ArrowPuzzle(Profile.load(args.profile))
+            with Image.open(args.active_image) as active, Image.open(args.solved_image) as solved:
+                buttons = FarmProfile.create(puzzle, active, solved, tuple(args.active_box), tuple(args.reward_box))
+            buttons.save(args.farm_profile)
+            print(f"Saved {args.farm_profile}")
+            return 0
+        if args.action == "farm":
+            if args.rounds < 1 or not 1 <= args.batch_size <= 12:
+                cli.error("--rounds must be positive and --batch-size must be 1-12")
+            puzzle = ArrowPuzzle(Profile.load(args.profile))
+            if puzzle.profile.difficulty != "expert":
+                raise ToolkitError("Farm mode requires an expert board profile.")
+            buttons = FarmProfile.load(args.farm_profile)
+            device = Android(args.adb, args.serial)
+            board = current_board(device.capture(), puzzle, buttons)
+            print(f"Expert farm: {args.rounds} round(s), {args.batch_size} taps per batch.")
+            if puzzle.solved(board):
+                print("The reward screen is open. Starting will tap it to open the first new board.")
+            else:
+                print(f"The first board takes {len(puzzle.plan(board))} taps.")
+            if not args.apply:
+                print("Dry run. No taps sent.")
+                return 0
+            if input("Type FARM to start: ") != "FARM":
+                print("Cancelled.")
+                return 0
+            farm(device, puzzle, buttons, args.rounds, args.batch_size,
+                 report=lambda message: print(message, flush=True))
             return 0
         live = args.image is None
         wants_input = args.action == "solve" and (args.step or args.apply)

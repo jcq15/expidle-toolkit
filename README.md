@@ -31,7 +31,7 @@ python3 -m venv .venv
 .venv/bin/expidle --help
 ```
 
-下面用 `expidle` 简写。请使用上面对应的可执行文件路径，或激活虚拟环境。校准窗口需要 Tk。部分 Linux 发行版需要另装 `python3-tk`。命令行和模拟测试可独立于 Tk 运行。Windows 有实机测试，macOS 和 Linux 的安装与模拟测试由 CI 配置覆盖，手机操作仍需现场验证。iOS 不适用。
+下面用 `expidle` 简写。请使用上面对应的可执行文件路径，或激活虚拟环境。校准窗口需要 Tk。部分 Linux 发行版需要另装 `python3-tk`。命令行和模拟测试可独立于 Tk 运行。Windows 已通过四种难度的实机验证。项目附带 Windows、macOS 和 Linux 的测试配置。iOS 不适用。
 
 ## 连接与校准
 
@@ -59,13 +59,33 @@ expidle arrow solve --profile local/expert.json --apply
 expidle arrow solve --profile local/expert.json --apply --batch-size 4
 ```
 
-默认只预览。运行中保持游戏在前台，不要同时操作手机。每批都会检查棋盘是否符合预期。识别失败、屏幕尺寸改变或棋盘出现意外时会停止，不会自动重试点击。可以按 Ctrl+C 中断，已发送到手机的那批点击可能仍会执行完。程序只操作当前棋盘，不领取奖励、不启动下一盘。
+默认只预览。运行中保持游戏在前台，不要同时操作手机。每批都会检查棋盘是否符合预期。识别失败、屏幕尺寸改变或棋盘出现意外时会停止，不会自动重试点击。可以按 Ctrl+C 中断，已发送到手机的那批点击可能仍会执行完。单盘模式只操作当前棋盘。
 
 离线也能校准和预览。先截屏，然后在两个命令中加 `--image local/board.png`：
 
 ```sh
 expidle capture local/board.png
 expidle arrow solve --image local/board.png --profile local/expert.json --overlay local/offline.png
+```
+
+## 专家刷分
+
+打开专家数字棋盘后，用 `--rounds` 指定要完成的局数。也可从专家结算页开始，屏幕上已经解完的那盘不计入本次局数。
+
+```sh
+# 预览，不发点击
+expidle arrow farm --profile local/expert.json --farm-profile local/farm.json --rounds 10
+
+# 输入 FARM 一次，随后自动完成 10 局
+expidle arrow farm --profile local/expert.json --farm-profile local/farm.json --rounds 10 --apply
+```
+
+每局按批求解。确认所有格子都是 1 且底部出现奖励文字后，才点击奖励按钮打开下一局。每次开局后会确认新棋盘和进行中的按钮。达到指定局数时停在最后一局结算页。识别异常时打印已完成局数并停止。这里的局数按已确认的结算页计数，星星数量由游戏决定。
+
+第一次使用需要校准奖励按钮。用 `expidle capture` 保存一张正在玩的专家棋盘和同一盘解完后的结算页，查看两张原始截图中底部按钮文字的像素坐标。用两个矩形分别框住进行中的文字和结算文字，坐标顺序为左、上、右、下。下面坐标来自一台 1440 × 3120 的手机，请按截图替换。使用与专家棋盘校准相同的主题、语言和显示设置。奖励文字变化导致无法匹配时，用新的结算截图校准。
+
+```sh
+expidle arrow calibrate-farm --profile local/expert.json --farm-profile local/farm.json --active-image local/active.png --solved-image local/solved.png --active-box 527 2745 717 2805 --reward-box 380 2745 855 2805
 ```
 
 ## 开发
