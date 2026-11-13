@@ -136,12 +136,12 @@ def wait_for_board(screen: Screen, puzzle: ArrowPuzzle, profile: FarmProfile, *,
 
 
 def farm(
-    screen: Screen, puzzle: ArrowPuzzle, profile: FarmProfile, rounds: int, batch_size: int, *,
+    screen: Screen, puzzle: ArrowPuzzle, profile: FarmProfile, rounds: int, batch_size: int | None, *,
     report=print,
 ) -> None:
     if puzzle.profile.difficulty != "expert" or profile.size != puzzle.profile.size:
         raise ToolkitError("Use matching expert board and farm profiles.")
-    if rounds < 1 or not 1 <= batch_size <= 12:
+    if rounds < 1 or (batch_size is not None and not 1 <= batch_size <= 12):
         raise ValueError("Invalid round count or batch size.")
     completed = 0
     try:
@@ -149,12 +149,11 @@ def farm(
         for number in range(1, rounds + 1):
             if puzzle.solved(board):
                 # A solved board already on screen can be used to start, but is not counted.
-                wait_for_board(screen, puzzle, profile, solved=True)
                 screen.tap_many([profile.reward_point])
                 board = wait_for_board(screen, puzzle, profile, solved=False)
             moves = puzzle.plan(board)
             report(f"Round {number}/{rounds}: {len(moves)} taps")
-            if not execute(screen, puzzle, board, moves, lambda *_: True, batch_size=batch_size):
+            if not execute(screen, puzzle, board, moves, lambda *_: True, batch_size=batch_size or len(moves)):
                 raise ToolkitError("Board did not finish.")
             board = wait_for_board(screen, puzzle, profile, solved=True)
             completed += 1

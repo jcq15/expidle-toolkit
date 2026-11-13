@@ -26,8 +26,12 @@ def adb_call(adb: str, *args: str, timeout: float = 15) -> bytes:
 
 
 class Android:
-    def __init__(self, adb: str = "adb", serial: str | None = None):
+    def __init__(self, adb: str = "adb", serial: str | None = None, *, tap_delay_ms: int = 0):
+        if not 0 <= tap_delay_ms <= 1000:
+            raise ValueError("Tap delay must be between 0 and 1000 ms.")
         self.adb = adb
+        self.tap_delay_ms = tap_delay_ms
+        self._input_command: str | None = None
         lines = adb_call(adb, "devices").decode(errors="replace").splitlines()
         devices = [line.split()[0] for line in lines if line.endswith("\tdevice")]
         if serial is None and len(devices) == 1:
@@ -57,8 +61,16 @@ class Android:
             raise ToolkitError("Invalid ADB screenshot.") from error
 
     def tap_many(self, points: Sequence[Point]) -> None:
+        if not points:
+            return
+        if self._input_command is None:
+            try:
+                services = self.run("shell", "cmd", "-l").decode(errors="replace")
+            except ToolkitError:
+                services = ""
+            self._input_command = "cmd input" if "input" in map(str.strip, services.splitlines()) else "input"
         self.require_game()
-        commands = [f"input tap {int(x)} {int(y)}" for x, y in points]
-        if commands:
-            # Full boards need time for the input command and pause per tap.
-            self.run("shell", " && sleep 0.06 && ".join(commands), timeout=15 + 0.6 * len(commands))
+        commands = [f"{self._input_command} tap {int(x)} {int(y)}" for x, y in points]
+        delay = self.tap_delay_ms / 1000
+        separator = f" && sleep {delay:.3f} && " if delay else " && "
+        self.run("shell", separator.join(commands), timeout=15 + (0.6 + delay) * len(commands))

@@ -48,8 +48,11 @@ def parser() -> argparse.ArgumentParser:
     repeat.add_argument("--profile", type=Path, required=True)
     repeat.add_argument("--farm-profile", type=Path, required=True)
     repeat.add_argument("--rounds", type=int, required=True)
-    repeat.add_argument("--batch-size", type=int, default=8, help="taps per check (1-12)")
+    repeat.add_argument("--batch-size", type=int, help="taps per check (1-12, default: whole board)")
     repeat.add_argument("--apply", action="store_true", help="confirm once, then play")
+    for action in (run, repeat):
+        action.add_argument("--tap-delay-ms", type=int, default=0,
+                            help="extra pause between taps (0-1000 ms, default: 0)")
     return cli
 
 
@@ -84,16 +87,22 @@ def main(argv=None) -> int:
             buttons.save(args.farm_profile)
             print(f"Saved {args.farm_profile}")
             return 0
+        if args.action in ("solve", "farm"):
+            if not 0 <= args.tap_delay_ms <= 1000:
+                cli.error("--tap-delay-ms must be 0-1000")
+            if args.batch_size is not None and not 1 <= args.batch_size <= 12:
+                cli.error("--batch-size must be 1-12")
         if args.action == "farm":
-            if args.rounds < 1 or not 1 <= args.batch_size <= 12:
-                cli.error("--rounds must be positive and --batch-size must be 1-12")
+            if args.rounds < 1:
+                cli.error("--rounds must be positive")
             puzzle = ArrowPuzzle(Profile.load(args.profile))
             if puzzle.profile.difficulty != "expert":
                 raise ToolkitError("Farm mode requires an expert board profile.")
             buttons = FarmProfile.load(args.farm_profile)
-            device = Android(args.adb, args.serial)
+            device = Android(args.adb, args.serial, tap_delay_ms=args.tap_delay_ms)
             board = current_board(device.capture(), puzzle, buttons)
-            print(f"Expert farm: {args.rounds} round(s), {args.batch_size} taps per batch.")
+            mode = f"{args.batch_size} taps per batch" if args.batch_size else "whole board"
+            print(f"Expert farm: {args.rounds} round(s), {mode}.")
             if puzzle.solved(board):
                 print("The reward screen is open. Starting will tap it to open the first new board.")
             else:
@@ -113,9 +122,7 @@ def main(argv=None) -> int:
             cli.error("--step and --apply need a live ADB device")
         if args.action == "solve" and args.limit is not None and args.limit < 1:
             cli.error("--limit must be at least 1")
-        if args.action == "solve" and args.batch_size is not None and not 1 <= args.batch_size <= 12:
-            cli.error("--batch-size must be 1-12")
-        device = Android(args.adb, args.serial) if live else None
+        device = Android(args.adb, args.serial, tap_delay_ms=getattr(args, "tap_delay_ms", 0)) if live else None
         if device is not None:
             frame = device.capture()
         else:
