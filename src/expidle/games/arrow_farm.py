@@ -13,6 +13,7 @@ from .arrow_screen import ArrowPuzzle
 
 Box = tuple[int, int, int, int]
 REWARD_DELAY = 0.15
+PACE_INTERVAL = 10
 
 
 def mask(image: Image.Image) -> Image.Image:
@@ -144,6 +145,7 @@ def farm(
         raise ToolkitError("Use matching expert board and farm profiles.")
     if rounds < 1 or (batch_size is not None and not 1 <= batch_size <= 12):
         raise ValueError("Invalid round count or batch size.")
+    started_at = monotonic()
     processed = 0
     try:
         board = current_board(screen.capture(), puzzle, profile)
@@ -164,6 +166,14 @@ def farm(
             processed += 1
             if batch_size is not None:
                 report(f"Verified {processed}/{rounds} rounds.")
+            if processed % PACE_INTERVAL == 0:
+                elapsed = monotonic() - started_at
+                if elapsed > 0:
+                    report(
+                        f"Pace after {processed} rounds: "
+                        f"{elapsed / processed:.2f} s/round, "
+                        f"{60 * processed / elapsed:.1f} rounds/min (run average)."
+                    )
             if number < rounds:
                 if batch_size is None:
                     sleep(REWARD_DELAY)

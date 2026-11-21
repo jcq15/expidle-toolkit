@@ -80,6 +80,22 @@ class FarmTest(unittest.TestCase):
         self.assertEqual(device.board, self.finished)
         self.assertIn("Final board was not checked", messages[-1])
 
+    @patch("expidle.games.arrow_farm.sleep")
+    def test_pace_is_cumulative_every_ten_rounds_without_extra_frames(self, _):
+        device = FakeGame(self.puzzle, [self.active] * 20)
+        messages = []
+        # The simulated pace drops after round 10 to distinguish the run average.
+        elapsed = {
+            frame: 2 * frame + 2 * max(0, frame - 11) for frame in range(22)
+        }
+        with patch("expidle.games.arrow_farm.monotonic", side_effect=lambda: elapsed[device.frames]):
+            farm(device, self.puzzle, self.profile, 20, None, report=messages.append)
+        self.assertEqual(device.frames, 21)
+        self.assertEqual([message for message in messages if message.startswith("Pace")], [
+            "Pace after 10 rounds: 2.20 s/round, 27.3 rounds/min (run average).",
+            "Pace after 20 rounds: 3.10 s/round, 19.4 rounds/min (run average).",
+        ])
+
     def test_unknown_reward_screen_stops_without_input(self):
         device = FakeGame(self.puzzle, [])
         device.reward_label = "Give up"
